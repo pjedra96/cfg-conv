@@ -1,0 +1,10 @@
+{
+  "name": "my-app",
+  "version": "1.2.0",
+  "debug": false,
+  "port": 8080,
+  "description": null,
+  "database": { "host": "localhost", "port": 5432, "password": "p@ss word#1" },
+  "features": ["auth", "billing"],
+  "motd": "Hello\n'world'"
+}

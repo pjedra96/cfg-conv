@@ -1,0 +1,22 @@
+{
+  "name": "cfg-conv",
+  "version": "0.1.0",
+  "description": "Convert config files between JSON, YAML, TOML and .env with one CLI",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "cfgconv": "bin/cfg-conv.js"
+  },
+  "scripts": {
+    "start": "node bin/cfg-conv.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18.3"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "smol-toml": "^1.9.0",
+    "yaml": "^2.9.1"
+  }
+}
