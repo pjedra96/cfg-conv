@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// cfgconv - convert config files between JSON, YAML, TOML and .env. Detects the input format
+// cfgconv - convert config files between JSON, YAML, TOML, .env and .ini. Detects the input format
 // from the file name, reads from a file or stdin, and writes to stdout or a file (-o).
 // Copyright (c) 2026 Peter Jedra - MIT License
 
@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import { FORMATS, normaliseFormat, detectFormat, parse, stringify } from '../src/index.js';
 
 // Variables
-const VERSION = '0.1.0';
+const VERSION = '1.0.0';
 let args; // command-line arguments
 let indent = 2; // default indent
 let text; // file contents
@@ -26,6 +26,8 @@ Examples
   cfgconv .env --to yaml --nest
   cfgconv docker-compose.yml -o docker-compose.json
   cfgconv config.toml --to env > .env
+  cfgconv tsconfig.json --to yaml        (comments and trailing commas are fine)
+  cfgconv php.ini --to json --infer
 
 Options
   -t, --to <format>       Output format (inferred from -o if omitted)
@@ -34,13 +36,14 @@ Options
   -i, --indent <n>        Indent for JSON/YAML output (default 2)
   -n, --nest              .env input: split keys on the separator into nested objects
                           (DB__HOST=x -> { DB: { HOST: x } })
-      --infer             .env input: turn unquoted true/false/null/numbers into real types
+      --infer             .env/.ini input: turn unquoted true/false/null/numbers into real types
+                          (.ini also on/off, yes/no and none, as PHP does)
   -s, --separator <str>   Separator for nested .env keys (default "__")
       --keep-case         .env output: keep key case instead of UPPER_CASING
   -h, --help              Show this help
   -v, --version           Show the version
 
-Formats: json, yaml (yml), toml, env (dotenv)
+Formats: json (jsonc, json5), yaml (yml), toml, env (dotenv), ini
 `;
 
 // Prints an error message and exits

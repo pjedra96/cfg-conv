@@ -1,6 +1,6 @@
 {
   "name": "cfg-conv",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Convert config files between JSON, YAML, TOML and .env with one CLI",
   "private": true,
   "type": "module",
@@ -16,6 +16,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "json5": "^2.2.3",
     "smol-toml": "^1.9.0",
     "yaml": "^2.9.1"
   }

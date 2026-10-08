@@ -1,0 +1,10 @@
+{
+  // Comments and trailing commas, as in most real tsconfig files
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "strict": true, /* catch more mistakes */
+    "outDir": "dist",
+  },
+  "include": ["src"],
+}

@@ -4,8 +4,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { convert, detectFormat, normaliseFormat, parse, stringify } from '../src/index.js';
 import * as ENV from '../src/env.js';
+import * as INI from '../src/ini.js';
 
-const CLI = fileURLToPath(new URL('../bin/cfgconv.js', import.meta.url));
+const CLI = fileURLToPath(new URL('../bin/cfg-conv.js', import.meta.url));
 
 // smol-toml returns prototype-less objects, so compare plain copies
 const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -26,8 +27,12 @@ test('detects formats from file names', () => {
     assert.equal(detectFormat('.env.production'), 'env');
     assert.equal(detectFormat('prod.env'), 'env');
     assert.equal(detectFormat('README'), undefined);
+    assert.equal(detectFormat('settings.jsonc'), 'json');
+    assert.equal(detectFormat('config.json5'), 'json');
+    assert.equal(detectFormat('php.ini'), 'ini');
     assert.equal(normaliseFormat('yml'), 'yaml');
     assert.equal(normaliseFormat('dotenv'), 'env');
+    assert.equal(normaliseFormat('jsonc'), 'json');
     assert.equal(normaliseFormat('xml'), undefined);
 });
 
@@ -90,7 +95,84 @@ test('.env --infer only converts unquoted values', () => {
     });
 });
 
+test('JSON input accepts comments and trailing commas', () => {
+    const text = '\uFEFF{\n  // line comment\n  "a": 1, /* block */\n  "b": [1, 2,],\n}\n';
+    assert.deepEqual(parse(text, 'json'), { a: 1, b: [1, 2] });
+    assert.equal(stringify({ a: 1 }, 'json'), '{\n  "a": 1\n}\n');
+});
+
+test('.ini parsing follows PHP: sections, comments, lists, named entries and quotes', () => {
+    const text = [
+        '; comment',
+        'top = 1',
+        '[PHP]',
+        'engine = On ; trailing comment',
+        'error_reporting = E_ALL & ~E_DEPRECATED',
+        'extension[] = curl',
+        'extension[] = mbstring',
+        'opts[mode] = fast',
+        'path = "C:\\php\\ext"',
+        'quoted = "say \\"hi\\" for \\$5"',
+        "single = 'raw \\n ; not a comment'",
+        'multi = "one',
+        'two"',
+        'empty =',
+        '[mail function]',
+        'SMTP = localhost',
+        '',
+    ].join('\r\n');
+    assert.deepEqual(INI.parse(text), {
+        top: '1',
+        PHP: {
+            engine: 'On',
+            error_reporting: 'E_ALL & ~E_DEPRECATED',
+            extension: ['curl', 'mbstring'],
+            opts: { mode: 'fast' },
+            path: 'C:\\php\\ext',
+            quoted: 'say "hi" for $5',
+            single: 'raw \\n ; not a comment',
+            multi: 'one\ntwo',
+            empty: '',
+        },
+        'mail function': { SMTP: 'localhost' },
+    });
+});
+
+test('.ini --infer converts PHP booleans, null and numbers, but not quoted values', () => {
+    assert.deepEqual(INI.parse('a = On\nb = off\nc = yes\nd = none\ne = null\nf = 42\ng = "On"\nh = 128M', { infer: true }), {
+        a: true, b: false, c: true, d: false, e: null, f: 42, g: 'On', h: '128M',
+    });
+});
+
+test('.ini output writes sections, lists and dotted keys, and round-trips with --infer', () => {
+    const out = stringify({ ...sample, reporting: 'E_ALL & ~E_NOTICE', mode: 'on', note: 'a "b" ${c}' }, 'ini');
+    assert.equal(out, [
+        'name = my-app',
+        'port = 8080',
+        'debug = false',
+        'features[] = auth',
+        'features[] = billing',
+        'reporting = E_ALL & ~E_NOTICE',
+        'mode = "on"',
+        'note = "a \\"b\\" \\${c}"',
+        '',
+        '[database]',
+        'host = localhost',
+        'port = 5432',
+        '',
+    ].join('\n'));
+    assert.deepEqual(INI.parse(out, { infer: true }), {
+        ...sample, reporting: 'E_ALL & ~E_NOTICE', mode: 'on', note: 'a "b" ${c}',
+    });
+    assert.equal(stringify({ app: { db: { host: 'x', ports: [1, 2] } } }, 'ini'),
+        '[app]\ndb.host = x\ndb.ports[] = 1\ndb.ports[] = 2\n');
+});
+
 test('clear errors for unsupported shapes', () => {
+    assert.throws(() => stringify([1, 2], 'ini'), /top-level object/);
+    assert.throws(() => stringify({ 'a=b': 1 }, 'ini'), /can't use "a=b" as a key/);
+    assert.throws(() => INI.parse('[PHP]\nnot a pair'), /line 2: expected key = value/);
+    assert.throws(() => INI.parse('a = "open'), /unterminated/);
     assert.throws(() => stringify([1, 2], 'toml'), /top-level object/);
     assert.throws(() => stringify('x', 'env'), /top-level object/);
     assert.throws(() => stringify({ 'a-b': 1, a_b: 2 }, 'env'), /collision/);

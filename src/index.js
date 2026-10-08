@@ -1,13 +1,16 @@
 import { basename, extname } from 'node:path';
 import YAML from 'yaml';
 import * as TOML from 'smol-toml';
+import JSON5 from 'json5';
 import * as ENV from './env.js';
+import * as INI from './ini.js';
 
 // The formats cfgconv can read and write
-export const FORMATS = ['json', 'yaml', 'toml', 'env'];
+export const FORMATS = ['json', 'yaml', 'toml', 'env', 'ini'];
 
-// Alternative names accepted for --from / --to and file extensions
-const ALIASES = { yml: 'yaml', dotenv: 'env' };
+// Alternative names accepted for --from / --to and file extensions. JSON with comments (.jsonc, .json5)
+// is read as JSON, since the JSON reader accepts comments and trailing commas
+const ALIASES = { yml: 'yaml', dotenv: 'env', jsonc: 'json', json5: 'json' };
 
 // Normalises a user-supplied format name ("YML" -> "yaml"); returns undefined if unknown
 export function normaliseFormat(name) {
@@ -17,7 +20,7 @@ export function normaliseFormat(name) {
     return FORMATS.includes(resolved) ? resolved : undefined;
 }
 
-// Guesses the format from a file name: package.json, config.yml, Cargo.toml, .env, .env.local, prod.env
+// Guesses the format from a file name: package.json, tsconfig.jsonc, config.yml, Cargo.toml, .env, .env.local, prod.env, php.ini
 export function detectFormat(filename) {
     if (!filename) return undefined;
     const base = basename(filename).toLowerCase();
@@ -46,10 +49,11 @@ function stripNulls(value, path, warn) {
     return value;
 }
 
-// Parses file text of the given format into a plain JavaScript value. Throws on invalid input
+// Parses file text of the given format into a plain JavaScript value. Throws on invalid input.
+// JSON is read with JSON5, so comments and trailing commas (tsconfig.json, VS Code settings) are accepted
 export function parse(text, format, options = {}) {
     switch (format) {
-        case 'json': return JSON.parse(text.replace(/^﻿/, ''));
+        case 'json': return JSON5.parse(text.replace(/^﻿/, ''));
         case 'yaml': {
             const docs = YAML.parseAllDocuments(text);
             if (docs.length > 1) throw new Error(`YAML input has ${docs.length} documents; only single-document files are supported`);
@@ -60,6 +64,7 @@ export function parse(text, format, options = {}) {
         }
         case 'toml': return TOML.parse(text);
         case 'env': return ENV.parse(text, options);
+        case 'ini': return INI.parse(text, options);
         default: throw new Error(`Unknown input format "${format}"`);
     }
 }
@@ -67,7 +72,7 @@ export function parse(text, format, options = {}) {
 // Writes a JavaScript value out as text in the given format. Lossy changes (e.g. dropped nulls) go to options.onWarning
 // The function decides which format to write. It doesn't write anything itself; it hands the work to the right writer: 
 // JSON.stringify for JSON, YAML.stringify from the yaml package for YAML, TOML.stringify from smol-toml for TOML,
-// and ENV.stringify for .env.
+// ENV.stringify for .env and INI.stringify for .ini. JSON with comments is written as plain JSON.
 export function stringify(data, format, options = {}) {
     const indent = options.indent ?? 2;
     const warn = options.onWarning || (() => {});
@@ -81,6 +86,7 @@ export function stringify(data, format, options = {}) {
             return TOML.stringify(stripNulls(data, '', warn)) + '\n';
         }
         case 'env': return ENV.stringify(data, options);
+        case 'ini': return INI.stringify(data, { onWarning: warn });
         default: throw new Error(`Unknown output format "${format}"`);
     }
 }

@@ -1,11 +1,11 @@
 # cfgconv
 
-Convert config files between **JSON, YAML, TOML and .env** with one command.
+Convert config files between **JSON, YAML, TOML, .env and .ini** with one command.
 
 ```sh
-node bin/cfgconv.js package.json --to toml
-node bin/cfgconv.js .env --to yaml --nest
-node bin/cfgconv.js docker-compose.yml -o docker-compose.json
+node bin/cfg-conv.js package.json --to toml
+node bin/cfg-conv.js .env --to yaml --nest
+node bin/cfg-conv.js docker-compose.yml -o docker-compose.json
 ```
 
 Instead of reaching for `json2yaml`, `env2json`, `toml2json` and friends, use one tool that
@@ -19,16 +19,16 @@ Requires Node.js 18.3 or newer. In this folder, install the two dependencies onc
 npm install
 ```
 
-Then run it with `node bin/cfgconv.js`, from this folder or by its full path from anywhere
-(e.g. `node C:\tools\cfg-conv\bin\cfgconv.js app.json --to yaml`). `npm start -- <arguments>`
+Then run it with `node bin/cfg-conv.js`, from this folder or by its full path from anywhere
+(e.g. `node C:\tools\cfg-conv\bin\cfg-conv.js app.json --to yaml`). `npm start -- <arguments>`
 works too, from this folder. The `--` passes the arguments through to cfgconv.
 
 ## Usage
 
 ```
-node bin/cfgconv.js <file> --to <format> [options]
-node bin/cfgconv.js <file> -o <output-file>
-cat <file> | node bin/cfgconv.js --from <format> --to <format>
+node bin/cfg-conv.js <file> --to <format> [options]
+node bin/cfg-conv.js <file> -o <output-file>
+cat <file> | node bin/cfg-conv.js --from <format> --to <format>
 ```
 
 | Option | Description |
@@ -38,12 +38,12 @@ cat <file> | node bin/cfgconv.js --from <format> --to <format>
 | `-o, --output <file>` | Write to a file instead of stdout |
 | `-i, --indent <n>` | Indent for JSON/YAML output (default 2) |
 | `-n, --nest` | `.env` input: split keys on the separator into nested objects |
-| `--infer` | `.env` input: turn unquoted `true`/`false`/`null`/numbers into real types |
+| `--infer` | `.env`/`.ini` input: turn unquoted `true`/`false`/`null`/numbers into real types (`.ini` also `on`/`off`, `yes`/`no`, `none`, as PHP does) |
 | `-s, --separator <str>` | Separator for nested `.env` keys (default `__`) |
 | `--keep-case` | `.env` output: keep key case instead of `UPPER_CASING` |
 
-Formats: `json`, `yaml` (`yml`), `toml`, `env` (`dotenv`). Files named `.env`, `.env.local`,
-`.env.production` or `*.env` are recognised as `.env`.
+Formats: `json` (`jsonc`, `json5`), `yaml` (`yml`), `toml`, `env` (`dotenv`), `ini`. Files named `.env`, `.env.local`,
+`.env.production` or `*.env` are recognised as `.env`; `.jsonc` and `.json5` files are read as JSON.
 
 ## Examples
 
@@ -51,7 +51,7 @@ Formats: `json`, `yaml` (`yml`), `toml`, `env` (`dotenv`). Files named `.env`, `
 Pydantic and others.
 
 ```sh
-$ node bin/cfgconv.js examples/app.json --to env
+$ node bin/cfg-conv.js examples/app.json --to env
 NAME=my-app
 VERSION=1.2.0
 DEBUG=false
@@ -68,7 +68,7 @@ MOTD="Hello\n'world'"
 **.env → YAML**: `--nest` rebuilds the structure, `--infer` restores numbers and booleans.
 
 ```sh
-$ node bin/cfgconv.js examples/.env --to yaml --nest --infer
+$ node bin/cfg-conv.js examples/.env --to yaml --nest --infer
 DATABASE:
   HOST: localhost
   PORT: 5432
@@ -87,10 +87,54 @@ SERVERS:
   - b.example.com
 ```
 
+**JSON with comments**: comments and trailing commas (`tsconfig.json`, VS Code settings) are fine.
+The output is plain JSON or whichever format you ask for.
+
+```sh
+$ node bin/cfg-conv.js examples/tsconfig.json --to yaml
+compilerOptions:
+  target: ES2022
+  module: NodeNext
+  strict: true
+  outDir: dist
+include:
+  - src
+```
+
+**php.ini → JSON**: sections become objects, `extension[] = …` lines become a list, and `--infer`
+turns `On`/`Off` and numbers into real values.
+
+```sh
+$ node bin/cfg-conv.js examples/php.ini --to json --infer
+{
+  "PHP": {
+    "engine": true,
+    "short_open_tag": false,
+    "memory_limit": "128M",
+    "max_execution_time": 30,
+    "error_reporting": "E_ALL & ~E_DEPRECATED & ~E_STRICT",
+    "display_errors": false,
+    "extension_dir": "ext",
+    "extension": [
+      "curl",
+      "mbstring",
+      "openssl"
+    ]
+  },
+  "Date": {
+    "date.timezone": "Europe/London"
+  },
+  "mail function": {
+    "SMTP": "localhost",
+    "smtp_port": 25
+  }
+}
+```
+
 **Pipes** work too:
 
 ```sh
-curl -s https://example.com/config.json | node bin/cfgconv.js -f json -t yaml
+curl -s https://example.com/config.json | node bin/cfg-conv.js -f json -t yaml
 ```
 
 ## What gets converted, and what can't be
@@ -104,14 +148,19 @@ Formats don't all support the same things, so cfgconv tells you rather than gues
 - **.env keys**: characters other than letters, digits and `_` become `_`, and keys are upper-cased
   (unless `--keep-case`). If two keys end up identical (`a-b` and `a_b`), the conversion fails.
 - **Comments** are not carried over between formats.
+- **.ini follows PHP's rules** (php.ini, `parse_ini_file`). INI only has sections one level deep, so
+  objects nested deeper are written with dotted keys (`db.host = x`), and lists of plain values as
+  `key[] = item`. Empty lists and objects can't be written and are dropped with a warning. PHP constant
+  expressions (`E_ALL & ~E_NOTICE`) and `${VAR}` are kept as text, not evaluated.
 - **Multi-document YAML** (`---` separators) isn't supported yet.
 - **.env variable expansion** (`${OTHER}`) is not performed; values are copied as written.
 
 ## Project layout
 
-- `bin/cfgconv.js` - the command: reads the options, the input and writes the output
+- `bin/cfg-conv.js` - the command: reads the options, the input and writes the output
 - `src/index.js` - format detection and conversion between the four formats
 - `src/env.js` - `.env` parsing and writing
+- `src/ini.js` - `.ini` parsing and writing (PHP rules)
 - `test/` - tests, run with `npm test`
 - `examples/` - sample files used in the examples above
 
