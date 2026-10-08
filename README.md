@@ -1,6 +1,6 @@
-# cfgconv
+# cfg-conv
 
-Convert config files between **JSON, YAML, TOML, .env and .ini** with one command.
+Converting config files between **JSON, YAML, TOML, .env and .ini** with one command.
 
 ```sh
 node bin/cfg-conv.js package.json --to toml
@@ -8,12 +8,12 @@ node bin/cfg-conv.js .env --to yaml --nest
 node bin/cfg-conv.js docker-compose.yml -o docker-compose.json
 ```
 
-Instead of reaching for `json2yaml`, `env2json`, `toml2json` and friends, use one tool that
-detects the input format from the file name and writes the one you ask for.
+Instead of reaching for `json2yaml`, `env2json`, `toml2json` and other tools, this tool
+detects the input format from the file name and writes the one requested.
 
 ## Setup
 
-Requires Node.js 18.3 or newer. In this folder, install the two dependencies once:
+Requires Node.js 18.3 or newer. In this folder, we install the two dependencies once:
 
 ```sh
 npm install
